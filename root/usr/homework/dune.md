@@ -30,35 +30,3 @@
 ##总结
 通过阅读本篇论文首先使我对虚拟化部分有了更进一步的了解，但是本篇论文中同样提到了，这种实现方式同样会产生一些安全方面的威胁，而且dune并不能支持普通的guest os，所以在现实运用方面仍然不够完备，仍值得进一步去探索。
 
-
-#IX阅读笔记
-
-通过论文名字可以看出，该篇文章主要研究针对有较大数据吞吐量并且要求延迟较低的数据平台设计的操作系统。
-
-IX通过硬件虚拟化技术将kernel的管理和调度功能同网络进程分割开。
-
-Dataplane在本地无复制的API上构建的，并且通过消除dataplane实例的硬件线程和网络队列，以及分批处理有界包去完成，并且通过消除一致性通信和多核同步性问题实现了big bandwidth和low latency。
-
-##motivation
-现在的datacenter的applications都需要在大量的服务器节点间进行数据传递，因此我们需要进行大量的小数据量的快速低延迟传递。一些kernel bypass（内核旁路）可以消除自己的消息传递，但是不能做到high packet和low latency之间很好的tradeoff。
-
-IX实现了high throughput，low latency，strong protection和resource efficiency。
-
-IX利用了dune和virtualization hardware去运行dataplane kernel，并且在不同的保护level下去跑applications。
-
-每一个dataplane在kernel上都以分批处理包的形式去处理网络进程的阶段，同时还会执行user mode下的相关的application。这种实现方式均分了API的需求同时提高了指令和数据的吞吐率，我们根据负载大小去自行设置batch的大小。
-##IX的实现
-IX的实现基于以下四个方面:
-第一，把保护控制机制和data plane分开。
-
-第二，用各自的分批处理机制去完成各自的任务。
-
-第三，native，zero-copy API with explicit flow control。
-
-第四，Flow consistent, synchronization-free processing。
-##什么原因使得IX如此之快？
-Dataplane用最小数量的分批处理机制去均分转换开销实现了结构的紧密耦合，这样会使得应用at the most right time才去调度，这对延迟敏感的应用是特别重要的。因此，这会减少kernel不必要的开销，而且对于高效的特殊应用比如说libix的I/O实现减少了中间的buffer层面，这也会使得IX变得更快。
-##IX的不足
-目前实现的IX并没有采用IOMMUs或者VT-d。代替的是，IX直接将ring level定为内存里，用linux的pagemap接口去决定物理地址，尽管这样会使得IX可以信任某些level，但是application code的安全控制仍然是隔离开的。而且当前版本的IX并没有充分利用NIC‘s SR-IOV，替代的是把所有的物理设备都放到了dataplane。
-##future work
-下面会进一步研究plane控制问题，包括动态runtime的控制，在保证throughout和latency的同时重新调整可以进一步调整的线程的网络流量。还会进一步将支持microsecond延迟的网络协议比如DCTCP或者ECN引入到IX中，减少IX部署的buffering characteristics。
