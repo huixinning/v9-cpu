@@ -1,21 +1,35 @@
 #Dune阅读笔记
 ##如何实现safe user-level access to privileged cpu features？
 我们有两种方式去达到该目的，第一从kernel层面进行改进，但是kernel改进在现实中是不太现实的。第二，我们可以将应用绑定到虚拟机上。但是有些时候为了实现这些目的去做的改变或许不值得问题本身。本篇论文首先在相关工作领域做了一些研究，其中包括Azul system通过分页机制明显提高了garbage collection的效率，而且user 模式下的program上的进程迁移会从page fault and syscall中获益。我们在本篇论文中研究了一种新的方式，即通过virtual hardware实现了user模式下的application即可以成功的访问kernel，而且不会损坏kernel的状态。
+
 本文主要从virtualization和 hardware、kernel、user mode environment 和applications四个方面，详细的介绍了实现application can access to privileged cpu 的条件支持，限制以及application的特点。
+
 首先在第二部分首先介绍了virtualization and hardware，为了提高虚拟化的性能以及简化VMM的实现，Intel实现了VT-x，而且VTX采取可以将cpu分为两种root VMX和non-root VMX的设计模式，这种设计模式可以更好的实现virtual hardware。
+
 在接下来的第三部分介绍了kernel支持dune的设计，process using dune可以使其在VMX non-root模式下安全访问系统的硬件部分。同时Dune使用VT-x与标准的VMMs隔离开来，所以dune会把一个process环境当成一个machine环境，这样就会导致dune并不支持普通的guest OS，但同时保证了dune的轻量级和灵活性。
+
 在dune的实现过程中面临一个最大的问题就是内存管理，因为dune的实现在阻止任意访问物理内存的时候将页表直接暴露给了user programs，但是我们只是想让用户可以灵活的在正确的process memory address添加自己想要的功能，而不是直接可以管理kernel-level memory。Dune通过查询kernel来匹配process memory并且手动更新EPT去映射。
+
 第四部分介绍了user-mode 的执行环境，与普通的user-mode不同的是，使用dune的user code在ring 0下运行。Ring 3模式同样也可以去跑，但是通常是去跑一些不被信任的code。另外一个不同之处是syscall一定要使用超级调用的模式。
+
 最后该篇论文从sandbox、wedge、garbage collector三个方面对application performance进行了验证。Dune的实现支持在Intel x86 64-bit long模式下，而且该实现可以灵活的支持一次运行上千条进程。
+
 通过阅读本篇论文首先使我对虚拟化部分有了更进一步的了解，但是本篇论文中同样提到了，这种实现方式同样会产生一些安全方面的威胁，而且dune并不能支持普通的guest os，所以在现实运用方面仍然不够完备，仍值得进一步去探索。
 
 
 #IX阅读笔记
 
 通过论文名字可以看出，该篇文章主要研究针对有较大数据吞吐量并且要求延迟较低的数据平台设计的操作系统。IX通过硬件虚拟化技术将kernel的管理和调度功能同网络进程分割开。Dataplane在本地无复制的API上构建的，并且通过消除dataplane实例的硬件线程和网络队列，以及分批处理有界包去完成，并且通过消除一致性通信和多核同步性问题实现了big bandwidth和low latency。
+
 现在的datacenter的applications都需要在大量的服务器节点间进行数据传递，因此我们需要进行大量的小数据量的快速低延迟传递。一些kernel bypass（内核旁路）可以消除自己的消息传递，但是不能做到high packet和low latency之间很好的tradeoff。
+
 IX实现了high throughput，low latency，strong protection和resource efficiency。IX利用了dune和virtualization hardware去运行dataplane kernel，并且在不同的保护level下去跑applications。每一个dataplane在kernel上都以分批处理包的形式去处理网络进程的阶段，同时还会执行user mode下的相关的application。这种实现方式均分了API的需求同时提高了指令和数据的吞吐率，我们根据负载大小去自行设置batch的大小。
-IX的实现是基于以下四个方面，第一，把保护控制机制和data plane分开。第二，用各自的分批处理机制去完成各自的任务。第三，native，zero-copy API with explicit flow control。第四，Flow consistent, synchronization-free processing。
+
+##IX的实现是基于以下四个方面，
+第一，把保护控制机制和data plane分开。
+第二，用各自的分批处理机制去完成各自的任务。
+第三，native，zero-copy API with explicit flow control。
+第四，Flow consistent, synchronization-free processing。
 ##什么原因使得IX如此之快？
 Dataplane用最小数量的分批处理机制去均分转换开销实现了结构的紧密耦合，这样会使得应用at the most right time才去调度，这对延迟敏感的应用是特别重要的。因此，这会减少kernel不必要的开销，而且对于高效的特殊应用比如说libix的I/O实现减少了中间的buffer层面，这也会使得IX变得更快。
 ##IX的不足
