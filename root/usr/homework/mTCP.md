@@ -12,11 +12,14 @@
 
 
 在该篇论文中提出了一种不需要改变现有的代码的情况下来解决该问题，我们发现现有的linux和Megapipe花费了大约80%到83%的CPU cycle在kernel，只留了很小的一部分给user-level的applications，所以我们想通过建立user-level TCP可以使applications直接访问packet，这样就可以使得TCP访问变得高效。
+
 ######本篇论文的主要工作分为以下两个方面：
 * 通过把syscall转化为应用内部进程间的交流IPC可以大大降低syscall overhead，但是通过这种IPC的方式分享内存间的消息比如文本交换其实花费的要比syscall更多。但是我们采用packet和socket批处理的方式来解决了该问题。而且还综合采用了每个core单独监听socket和多核间任务流负载均衡的机制来提高性能。
 * 只通过user-level的改变来解决问题，不存在kernel-level的改变，大大降低了工作的难度。mTCP提供了跟BSD和epoll很像的事件驱动接口，仅需要改变一点就可以实现。
+
 ####算法的实现
 该篇论文通过11473行C代码实现了包括packet I/O，TCP流管理，user-level socket API和事件调用功能的mTCP功能，而且通过552行代码去修补PSIO库。
+
 ####验证
 在该篇论文中主要从三个方面验证了mTCP:
 * 性能，mTCP是否在短的事务方面提供了很好的性能。实验结果证明，mTCP在linux和MegaPipe上的性能分别提升了25倍和3倍
